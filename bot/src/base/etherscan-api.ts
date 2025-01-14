@@ -1,0 +1,80 @@
+import { EventEmitter } from 'events';
+import dotenv from 'dotenv';
+dotenv.config();
+import * as afx from './global_base';
+
+export let apiKeyIndex = 0;
+export let apiKeySleepIndex = 0;
+
+export let apiKeyList: string[] = [
+    // process.env.API_KEY_1,
+    // process.env.API_KEY_2,
+    // process.env.API_KEY_3,
+    // process.env.API_KEY_4,
+    // process.env.API_KEY_5,
+    // process.env.API_KEY_6,
+    // process.env.API_KEY_7,
+    // process.env.API_KEY_8,
+    // process.env.API_KEY_9,
+    // process.env.API_KEY_10,
+    // process.env.API_KEY_11,
+    // process.env.API_KEY_12,
+    // process.env.API_KEY_13,
+    // process.env.API_KEY_14,
+    // process.env.API_KEY_15,
+    // process.env.API_KEY_16
+];
+
+function waitForEvent(eventEmitter: EventEmitter, eventName: string): Promise<void> {
+    return new Promise(resolve => {
+        eventEmitter.on(eventName, resolve);
+    });
+}
+
+async function waitSeconds(seconds: number): Promise<void> {
+    const eventEmitter = new EventEmitter();
+
+    setTimeout(() => {
+        eventEmitter.emit('TimeEvent');
+    }, seconds * 1000);
+
+    await waitForEvent(eventEmitter, 'TimeEvent');
+}
+
+export const getApiKey = async (): Promise<string | undefined> => {
+    apiKeyIndex = apiKeyIndex % apiKeyList.length;
+    const apiKey = apiKeyList[apiKeyIndex];
+    //console.log(`[etherscan-api] rotating api key ${apiKeyIndex}`);
+    apiKeyIndex++;
+
+    apiKeySleepIndex++;
+    apiKeySleepIndex = apiKeySleepIndex % (apiKeyList.length * 4);
+
+    if (apiKeySleepIndex === 0) {
+        await waitSeconds(1);
+    }
+
+    return apiKey;
+};
+
+export const executeEthscanAPI = async (url: string, apiKey: string): Promise<any> => {
+    //console.log(`${url}&apikey=${apiKey}`);
+    try {
+        const res = await fetch(url + `&apikey=${apiKey}`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const resData = await res.json();
+
+        // console.log('done');
+        return resData;
+
+    } catch (error) {
+        afx.error_log('executeEthscanAPI', error);
+    }
+};
+
+
