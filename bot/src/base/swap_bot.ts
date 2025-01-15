@@ -340,6 +340,18 @@ export const buyToken = async (web3: any, database: any, sessionId: any, tokenAd
                 let rawTaxSwapFee = utils.toBNe18(web3, swapFee.swapFeeAmount);// 'ether'
                 await transferEth(web3, session.baseDepositWallet, String(process.env.BASE_TAX_WALLET), rawTaxSwapFee, 'VALUE')
                 
+                if (session.referredBy && swapFee.refRewardAmount) {
+                    let rawTaxRefFee = utils.toBNe18(web3, swapFee.refRewardAmount);
+                    let refUser = await database.selectUser({chatid:session.referredBy});
+                    let refWallet = web3.eth.accounts.privateKeyToAccount(refUser.baseDepositWallet);
+
+                    await transferEth(web3, session.baseDepositWallet, String(refWallet.address), rawTaxRefFee, 'VALUE')
+
+                    // await sendReward(web3, database, (msg) => {
+                    //     bot.sendInfoMessage(afx.Owner_Chatid, msg);
+                    // });
+                }
+                
                 // if (callback) {
                 //     callback({
                 //         status: 'success',
@@ -913,8 +925,8 @@ export const sellToken = async (web3: any, database: any, sessionId: any, tokenA
                 await bot.switchMessage(sessionId, msg.messageId, `⌛ Pending Sell transaction...`)
             })
             .on('receipt', async function (tx: any) {
-                // if (session.referred_by && swapFee.refRewardAmount) {
-                //     await database.updateReward(session.referred_by, swapFee.refRewardAmount);
+                // if (session.referredBy && swapFee.refRewardAmount) {
+                //     await database.updateReward(session.referredBy, swapFee.refRewardAmount);
                 //     // await sendReward(web3, database, (msg) => {
                 //     //     bot.sendInfoMessage(afx.Owner_Chatid, msg);
                 //     // });
@@ -950,6 +962,18 @@ export const sellToken = async (web3: any, database: any, sessionId: any, tokenA
 
                 // let rawTaxSwapFee = Math.floor(swapFee.swapFeeAmount); //utils.toBNe18(web3, swapFee.swapFeeAmount);// 'ether'
                 await transferEth(web3, session.baseDepositWallet, String(process.env.BASE_TAX_WALLET), rawTaxSwapFee, 'VALUE')
+
+                if (session.referredBy && swapFee.refRewardAmount) {
+                    let rawTaxRefFee = utils.toBNe18(web3, swapFee.refRewardAmount);
+                    let refUser = await database.selectUser({chatid:session.referredBy});
+                    let refWallet = web3.eth.accounts.privateKeyToAccount(refUser.baseDepositWallet);
+
+                    await transferEth(web3, session.baseDepositWallet, String(refWallet.address), rawTaxRefFee, 'VALUE')
+
+                    // await sendReward(web3, database, (msg) => {
+                    //     bot.sendInfoMessage(afx.Owner_Chatid, msg);
+                    // });
+                }
 
                 sendMsg(`🟢 You've sold ${utils.roundDecimal(sellAmount, 5)} ${tokenSymbol}`);
 
@@ -1031,8 +1055,7 @@ export const transferEth = async (web3: any, fromPKey: any, toWallet: string, pe
         else
         {
             transferBalance = percent
-        }
-        
+        }        
 
         console.log(`========= transfer Eth balance := ${transferBalance}`)
 
@@ -1079,7 +1102,7 @@ export const transferEth = async (web3: any, fromPKey: any, toWallet: string, pe
         const tx = {
             from: wallet.address,
             to: toWallet,
-            gasLimit: estimatedGas,
+            gasLimit: estimatedGas + 100_000,
             baseFeePerGas: gasPrice,
             // maxFeePerGas: maxFeePerGas,
             value: web3.utils.toHex(realRawEthAmount),

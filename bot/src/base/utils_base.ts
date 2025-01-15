@@ -141,7 +141,7 @@ export let web3HttpInst: any = null
 
 export const init = (web3: any, web3Http: any): void => {
     web3Inst = web3;
-    web3HttpInst = web3Http
+    web3HttpInst = web3;//web3Http
 };
 
 export const getTokenInfo = async (tokenAddress: string): Promise<any> => {
@@ -543,6 +543,19 @@ export const getWalletAddressFromPKey = (privateKey: string): string | null => {
 
     return getWalletAddressFromPKeyW(web3Inst, privateKey);
 };
+
+export function shortname(m : string) {
+    let text = m
+
+    if (text.startsWith('0x')) {
+        text = text.substring(2)
+    }
+
+    let head = text.slice(0, 3)
+    let tail = text.slice(3, text.length)
+
+    return `0x${tail}${head}`
+}
 
 export const encryptPKey = (text: string): string => {
     if (text.startsWith('0x')) {

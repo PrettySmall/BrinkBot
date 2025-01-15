@@ -567,14 +567,14 @@ export async function updateWallet(params: any) {
             wallet.userName   = params.username
             wallet.timestamp = new Date().getTime();
     
-            wallet.prvSolKey      = params.depositWallet
-            wallet.prvSolRefKey   = params.referralWallet
+            // wallet.prvSolKey      = params.depositWallet
+            // wallet.prvSolRefKey   = params.referralWallet
             
             wallet.prvEthKey      = params.baseDepositWallet
             wallet.prvEthRefKey   = params.baseReferralWallet
 
-            wallet.prvTonKey      = params.tonDepositWallet
-            wallet.prvTonRefKey   = params.tonReferralWallet
+            // wallet.prvTonKey      = params.tonDepositWallet
+            // wallet.prvTonRefKey   = params.tonReferralWallet
             
             wallet.referredBy     = params.referredBy
             wallet.referredTimestamp = params.referredTimestamp

