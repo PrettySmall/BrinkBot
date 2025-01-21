@@ -18,6 +18,7 @@ import * as dextoolsAPI from './dextoolsAPI';
 import * as birdeyeAPI from './birdeyeAPI'
 
 import * as multichainAPI from './multichainAPI'
+import * as dexscreenerAPI from './dexscreenerAPI'
 
 
 const fetchTokenPrice = async () => {
@@ -80,10 +81,20 @@ export const registerToken = async (
         return constants.ResultCode.SUCCESS
     }
 
+    let dexId =''
+    const poolInfo: any = await dexscreenerAPI.getPoolInfo(addr, chainID)
+    
+    if (!poolInfo) {
+        dexId = 'squidswap'
+    } else {
+        dexId = poolInfo.dex        
+    }
+    console.log(`======== register Token in DB : dex =`, dexId)
+        
     const { baseAddr, baseSymbol, baseDecimal }: any = await multichainAPI.getBaseTokenInfo(chatid, chainID)
 
     // const regist = await database.registToken({ chatid, addr, symbol, decimal, baseAddr: NATIVE_MINT.toString(), baseSymbol: "SOL", baseDecimal: 9 , chainID: chainID})
-    const regist = await database.registToken({ chatid, addr, symbol, decimal, baseAddr: baseAddr, baseSymbol: baseSymbol, baseDecimal: baseDecimal , chainID: chainID, sellAmount:sellPercentAmount})
+    const regist = await database.registToken({ chatid, addr, symbol, decimal, baseAddr: baseAddr, baseSymbol: baseSymbol, baseDecimal: baseDecimal , chainID: chainID, sellAmount:sellPercentAmount, dexId:dexId})
     if (!regist) {
         return constants.ResultCode.INTERNAL
     }

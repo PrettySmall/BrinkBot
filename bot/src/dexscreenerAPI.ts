@@ -21,8 +21,8 @@ export const getPoolInfo = async (addr: string, chainMode: number) => {
 			data.name = pairInfo.baseToken.name
 			data.addr = pairInfo.baseToken.address
 			data.price = pairInfo.priceUsd
-			data.volume = pairInfo.volume.m5
-			data.priceChange = pairInfo.priceChange.m5
+			data.volume = pairInfo.volume.h24
+			data.priceChange = pairInfo.priceChange.h24
 			if (pairInfo.liquidity != undefined)
 			{
 				data.liquidity = pairInfo.liquidity.usd

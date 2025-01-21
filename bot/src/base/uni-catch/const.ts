@@ -8,7 +8,9 @@ export const uniswapV2RouterAddressBase = '0x4752ba5dbc23f44d87826276bf6fd6b1c37
 // export const uniswapV2RouterAddressETH = '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D' //Ethereum chain
 // export const UniswapV2FactoryContractAddressETH = '0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f' //Ethereum chain
 
-export const uniswapV2RouterAddressETH = '0xdD579594aF656E03e6767AE4EE116Ee9e1FA0Dd2' //Ink chain
+export const uniswapV2RouterAddressETH_Squid = '0xdD579594aF656E03e6767AE4EE116Ee9e1FA0Dd2' //Ink chain - squidswap
+export const uniswapV2RouterAddressETH_Inky = '0xA8C1C38FF57428e5C3a34E0899Be5Cb385476507'//InkySwap
+export const uniswapV2RouterAddressETH_Dyor = '0x9b17690dE96FcFA80a3acaEFE11d936629cd7a77'//DyorSwap
 export const UniswapV2FactoryContractAddressETH = '0x63b54dBBD2DAbf89D5c536746e534711f6094199' //Ink chain ???
 
 export const UniswapV2FactoryContractAddressBNB = '0x8909Dc15e40173Ff4699343b6eB8132c65e18eC6' //BNB chain

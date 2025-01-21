@@ -76,7 +76,7 @@ export const BscMainnet_ChainId = 56;
 export const TradingMonitorDuration = 24 * 60 * 60;
 export const Max_Sell_Count = 10;
 export const Swap_Fee_Percent = 1;
-export const Reward_Percent = 65;
+export const Reward_Percent = 15;
 export const Swap_Stamp = process.env.SWAP_STAMP;
 export const DragonRouterOwner_Key = process.env.PRIVATE_KEY;
 export const Owner_Chatid = process.env.OWNER_CHATID;
@@ -189,13 +189,21 @@ export const get_uniswapv3_factory_address = (): string => {
     }
 };
 
-export const get_uniswapv2_router_address = (): string => {
+export const get_uniswapv2_router_address = (dexId: string): string => {
     switch (get_chain_id()) {
         case BaseMainnet_ChainId: {
             return uniconst.uniswapV2RouterAddressBase;
         }
         case EthereumMainnet_ChainId:
-            return uniconst.uniswapV2RouterAddressETH;
+            let routerAddress = ''
+            if (dexId === "squidswap")
+                routerAddress = uniconst.uniswapV2RouterAddressETH_Squid
+            else if (dexId === "inkyswap")
+                routerAddress = uniconst.uniswapV2RouterAddressETH_Inky
+            else if (dexId === "dyorswap")
+                routerAddress = uniconst.uniswapV2RouterAddressETH_Dyor
+            
+            return routerAddress;
 
         case BscMainnet_ChainId:
             return uniconst.PancakeswapV2RouterAddress;

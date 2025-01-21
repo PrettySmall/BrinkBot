@@ -282,7 +282,7 @@ export const get_scan_url = (chainMode: number): string => {
 
     let scanUrl = ""
        
-    scanUrl = "inkscan"
+    scanUrl = "inkonchain"
 
     return scanUrl;
 };

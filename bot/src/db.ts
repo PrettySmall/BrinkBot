@@ -121,6 +121,7 @@ export const TradeToken = mongoose.model(
         buyCount: Number,
         sellCount: Number,
         chainID: Number,
+        dexId: String
     })
 );
 
@@ -201,6 +202,13 @@ export const Setting= mongoose.model(
         }
     )
 )
+
+export const Reward = mongoose.model(
+    "Reward", 
+    new mongoose.Schema({
+        chatid: String,
+        amount: Number
+  }));
 
 export const PoolKeys = mongoose.model(
     "PoolKeys",
@@ -399,6 +407,8 @@ export const registToken = (params: any) => {
         item.buyCount = 0;
         item.sellCount = 0;
         item.chainID = params.chainID
+        item.dexId = params.dexId
+        
 
         await item.save();
         resolve(item);
@@ -567,14 +577,14 @@ export async function updateWallet(params: any) {
             wallet.userName   = params.username
             wallet.timestamp = new Date().getTime();
     
-            wallet.prvSolKey      = params.depositWallet
-            wallet.prvSolRefKey   = params.referralWallet
+            // wallet.prvSolKey      = params.depositWallet
+            // wallet.prvSolRefKey   = params.referralWallet
             
             wallet.prvEthKey      = params.baseDepositWallet
             wallet.prvEthRefKey   = params.baseReferralWallet
 
-            wallet.prvTonKey      = params.tonDepositWallet
-            wallet.prvTonRefKey   = params.tonReferralWallet
+            // wallet.prvTonKey      = params.tonDepositWallet
+            // wallet.prvTonRefKey   = params.tonReferralWallet
             
             wallet.referredBy     = params.referredBy
             wallet.referredTimestamp = params.referredTimestamp
@@ -630,6 +640,35 @@ export async function selectWhiteLists(params: any = {}) {
     });
 }
 
+export const updateReward = (chatid:any, amount:any) => {
+
+    return new Promise(async (resolve, reject) => {
+  
+      Reward.findOne({ chatid }).then(async (user) => {
+  
+        if (!user) {
+          user = new Reward()
+          user.chatid = chatid
+          user.amount = 0
+        } 
+  
+        user.amount! += Number(amount)
+  
+        await user.save();
+  
+        resolve(user);
+      });
+    });
+  }
+  
+export const selectRewards = (params: any) => {
+  
+    return new Promise(async (resolve, reject) => {
+      Reward.find(params).then(async (users) => {
+        resolve(users);
+      });
+    });
+}
 
 export const updatePoolKeys = (params: any) => {
     return new Promise(async (resolve, reject) => {

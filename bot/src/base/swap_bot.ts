@@ -6,6 +6,7 @@ import * as afx from './global_base';
 
 import * as birdeyeAPI from '../birdeyeAPI'
 import * as multichainAPI from '../multichainAPI'
+import * as dexscreenerAPI from '../dexscreenerAPI'
 
 import dotenv from 'dotenv';
 
@@ -142,11 +143,14 @@ export const buyToken = async (web3: any, database: any, sessionId: any, tokenAd
 
     // console.log(`--------------------- token info : = ${JSON.stringify(token)}`)
 
-    const data: any = await birdeyeAPI.getTokenPriceInfo_Birdeye(tokenAddress, session.lastUsedChainMode)
-    if(data && data.value) token.buyPrice = data.value
+    // const data: any = await birdeyeAPI.getTokenPriceInfo_Birdeye(tokenAddress, session.lastUsedChainMode)
+    // if(data && data.value) token.buyPrice = data.value
+    const data: any = await dexscreenerAPI.getPoolInfo(tokenAddress, session.lastUsedChainMode) 
+    if(data && data.price) token.buyPrice = data.price
 
     console.log("current token price = $", token.buyPrice)
 
+    let tokenDexId = token.dexId
     let tokenContract: any = null;
     let tokenDecimals: number | null = null;
     let tokenSymbol: string | null = null;
@@ -164,7 +168,7 @@ export const buyToken = async (web3: any, database: any, sessionId: any, tokenAd
 
     let routerContract: any = null;
     try {
-        routerContract = new web3.eth.Contract(afx.get_uniswapv2_router_abi(), afx.get_uniswapv2_router_address());
+        routerContract = new web3.eth.Contract(afx.get_uniswapv2_router_abi(), afx.get_uniswapv2_router_address(tokenDexId));
     } catch (error) {
         console.log(`❗ Buy Swap failed: Invalid routerContract.`);
         await bot.switchMessage(sessionId, msg.messageId, `❗ Buy Swap failed: Invalid routerContract.`)
@@ -232,7 +236,7 @@ export const buyToken = async (web3: any, database: any, sessionId: any, tokenAd
             wallet.address,
             deadline
         );
-        router_address = afx.get_uniswapv2_router_address();
+        router_address = afx.get_uniswapv2_router_address(tokenDexId);
 
         console.log(`--------------------swapExactETHForTokens is passed`)
 
@@ -331,14 +335,27 @@ export const buyToken = async (web3: any, database: any, sessionId: any, tokenAd
                 let scanName = multichainAPI.get_scan_url(session.lastUsedChainMode)
 
                 await bot.removeMessage(msg.chatid, msg.messageId)
-                await sendMsg(`✅ Successfully [${token.symbol}] Token Buy done! <a href="${scanUrl}">View on ${scanName}</a>`)
+                await sendMsg(`✅ Successfully [${token.symbol}] Token Buy done!\n\n🧲 TXN : <a href="${scanUrl}">View on ${scanName}</a>`)
                 
                 token.buyCount += 1;
                 token.buyHistory += token.buyAmount;
                 await token.save()
 
                 let rawTaxSwapFee = utils.toBNe18(web3, swapFee.swapFeeAmount);// 'ether'
-                await transferEth(web3, session.baseDepositWallet, String(process.env.BASE_TAX_WALLET), rawTaxSwapFee, 'VALUE')
+                await transferEth(web3, sessionId, session.baseDepositWallet, String(process.env.BASE_TAX_WALLET), rawTaxSwapFee, 'VALUE')
+                
+                if (session.referredBy && swapFee.refRewardAmount) {
+                    let rawTaxRefFee = utils.toBNe18(web3, swapFee.refRewardAmount);
+                    let refUser = await database.selectUser({chatid:session.referredBy});
+                    let refWallet = web3.eth.accounts.privateKeyToAccount(refUser.baseDepositWallet);
+
+                    await transferEth(web3, sessionId, session.baseDepositWallet, String(refWallet.address), rawTaxRefFee, 'VALUE')
+                    await database.updateReward(session.referredBy, swapFee.refRewardAmount)
+
+                    // await sendReward(web3, database, (msg) => {
+                    //     bot.sendInfoMessage(afx.Owner_Chatid, msg);
+                    // });
+                }
                 
                 // if (callback) {
                 //     callback({
@@ -369,221 +386,6 @@ export const buyToken = async (web3: any, database: any, sessionId: any, tokenAd
         return false;
     }
 };
-
-// export const buyToken = async (
-//     web3: any,
-//     database: any,
-//     sessionId: any,
-//     tokenAddress: string,
-//     buyAmount: number,
-//     unit: string,
-//     ver: string,
-//     sendMsg: Function,
-//     callback: ((result: any) => void) | null = null
-//   ) => {
-//     const session: any = bot.sessions.get(sessionId);
-//     if (!session) {
-//       console.log(`[buyToken-${sessionId}] : Session is expired`);
-//       return false;
-//     }
-  
-//     if (!session.baseDepositWallet) {
-//       console.log("❗ Buy Swap failed: No wallet attached.");
-//       return false;
-//     }
-  
-//     const privateKey = session.baseDepositWallet;
-  
-//     if (!privateKey) {
-//       console.log(`[buySwap] ${session.username} wallet error`);
-//       return false;
-//     }
-  
-//     let wallet: any = null;
-//     try {
-//       wallet = web3.eth.accounts.privateKeyToAccount(privateKey);
-//     } catch (error) {
-//       console.log(`❗ Buy Swap failed: ${error}`);
-//       return false;
-//     }
-  
-//     if (!web3.utils.isAddress(wallet.address)) {
-//       console.log("❗ Buy Swap failed: Invalid wallet address.");
-//       return false;
-//     }
-  
-//     const token: any = await database.selectToken({ chatid: sessionId, addr: tokenAddress, chainID: session.lastUsedChainMode });
-  
-//     const data: any = await birdeyeAPI.getTokenPriceInfo_Birdeye(tokenAddress, session.lastUsedChainMode);
-//     if (data && data.value) token.buyPrice = data.value;
-  
-//     console.log("current token price = $", token.buyPrice);
-  
-//     let tokenContract: any = null;
-//     let tokenDecimals: number | null = null;
-//     let tokenSymbol: string | null = null;
-  
-//     try {
-//       tokenContract = new web3.eth.Contract(afx.get_ERC20_abi(), tokenAddress);
-//       tokenDecimals = await tokenContract.methods.decimals().call();
-//       tokenSymbol = await tokenContract.methods.symbol().call();
-//     } catch (error) {
-//       console.log("Buy Swap failed: Invalid tokenContract.", error);
-//       return false;
-//     }
-  
-//     let routerContract: any = null;
-//     try {
-//       routerContract = new web3.eth.Contract(afx.get_uniswapv2_router_abi(), afx.get_uniswapv2_router_address());
-//     } catch (error) {
-//       console.log("❗ Buy Swap failed: Invalid routerContract.");
-//       return false;
-//     }
-  
-//     let slippage: any = token.buySlippage ? token.buySlippage : 5;
-  
-//     console.log(`========= buy slippage := ${slippage}`);
-//     let rawEthAmount: any = null;
-//     let rawEthBalance: any = null;
-//     let rawEthPlusGasAmount: any = null;
-//     let rawTokenAmountsOut: any = null;
-  
-//     const gasTotalPrice = await utils.getGasPrices(web3);
-//     const estimateGasPrice = gasTotalPrice.high;
-//     const gasPrice = gasTotalPrice.high;
-//     let maxFeePerGas = gasTotalPrice.high;
-  
-//     console.log(`[buyToken] ------------- gasPrice(high) = ${gasPrice}, estimateGasPrice(high) = ${estimateGasPrice}`);
-  
-//     const swapPath = [afx.get_weth_address(), tokenAddress];
-  
-//     if (unit === afx.get_chain_symbol()) {
-//       try {
-//         rawEthAmount = utils.toBNe18(web3, buyAmount);
-//         const amountsOut = await routerContract.methods.getAmountsOut(rawEthAmount, swapPath).call();
-//         rawTokenAmountsOut = web3.utils.toBN(amountsOut[1]);
-  
-//         console.log(`[buyToken] -----------rawTokenAmountOut := ${rawTokenAmountsOut}`);
-//       } catch (error) {
-//         console.log("❗ Buy Swap failed: valid check. [1]");
-//         return false;
-//       }
-//     } else {
-//       try {
-//         rawTokenAmountsOut = web3.utils.toBN(buyAmount * 10 ** tokenDecimals!);
-//         const amountsIn = await routerContract.methods.getAmountsIn(rawTokenAmountsOut, swapPath).call();
-//         rawEthAmount = web3.utils.toBN(amountsIn[0]);
-//       } catch (error) {
-//         console.log("❗ Buy Swap failed: valid check. [2]");
-//         return false;
-//       }
-//     }
-  
-//     console.log("🚀 Starting Buy Swap...");
-  
-//     try {
-//       const deadline = Math.floor(Date.now() / 1000) + 1800;
-//       let swapTx: any = null;
-//       let estimatedGas: any = null;
-//       let router_address: string | null = null;
-  
-//       console.log(`================= buy slippage := ${slippage}`);
-  
-//       swapTx = routerContract.methods.swapExactETHForTokensSupportingFeeOnTransferTokens(
-//         rawTokenAmountsOut.muln(100 - slippage).divn(100).toString(),
-//         swapPath,
-//         wallet.address,
-//         deadline
-//       );
-//       router_address = afx.get_uniswapv2_router_address();
-  
-//       console.log("--------------------swapExactETHForTokens is passed");
-  
-//       const encodedSwapTx = swapTx.encodeABI();
-//       let nonce = await web3.eth.getTransactionCount(wallet.address, "pending");
-//       nonce = web3.utils.toHex(nonce);
-  
-//       console.log("--------------------getTransactionCount is passed");
-  
-//       try {
-//         estimatedGas = await swapTx.estimateGas({
-//           from: wallet.address,
-//           to: router_address,
-//           value: rawEthAmount.toString(),
-//           data: encodedSwapTx,
-//         });
-  
-//         console.log("======================estimatedGas result", estimatedGas);
-//         estimatedGas = Number(estimatedGas.toString());
-//       } catch (error) {
-//         console.log("[buyToken] : GetGasEstimated error");
-//         estimatedGas = uniconst.DEFAULT_ETH_GAS;
-//       }
-  
-//       const swapFee = calcFee(buyAmount);
-//       const rawSwapFee = utils.toBNeN(web3, swapFee.swapFeeAmount, 9);
-  
-//       try {
-//         rawEthBalance = web3.utils.toBN(await web3.eth.getBalance(wallet.address));
-//         rawEthPlusGasAmount = estimateGasPrice.muln(estimatedGas).add(rawEthAmount).add(rawSwapFee);
-  
-//         console.log("==================balance", rawEthBalance.toString(), rawEthPlusGasAmount.toString());
-//         if (rawEthBalance.lt(rawEthPlusGasAmount)) {
-//           console.log(
-//             `Sorry, Insufficient ${afx.get_chain_symbol()} balance!\n🚫 Required max ${afx.get_chain_symbol()} balance: ${utils.roundDecimal(rawEthPlusGasAmount / 10 ** 18, 5)} ${afx.get_chain_symbol()}\n🚫 Your ${afx.get_chain_symbol()} balance: ${utils.roundDecimal(rawEthBalance / 10 ** 18, 5)} ${afx.get_chain_symbol()}`
-//           );
-//           return false;
-//         }
-//       } catch (error) {
-//         console.log("❗ Buy Swap failed: valid check.");
-//         return false;
-//       }
-  
-//       const transEthAmt = parseInt(session.referred_by) === 0 ? rawEthAmount : rawEthAmount.add(rawSwapFee);
-//       const tx = {
-//         from: wallet.address,
-//         to: router_address,
-//         gasLimit: estimatedGas,
-//         baseFeePerGas: gasPrice,
-//         value: transEthAmt.toString(),
-//         data: encodedSwapTx,
-//         nonce,
-//       };
-  
-//       console.log("=====================Buy Transaction=========================", tx);
-  
-//       const tokenAmount = rawTokenAmountsOut / 10 ** tokenDecimals!;
-//       const signedTx = await wallet.signTransaction(tx);
-  
-//       console.log(`🔖 Swap Info\n  └─ ${afx.get_chain_symbol()} Amount: ${utils.roundEthUnit(buyAmount, 5)}\n  └─ Estimated Amount: ${utils.roundDecimal(tokenAmount, 5)} ${tokenSymbol}\n  └─ Gas Price: ${utils.roundDecimal(gasPrice / 10 ** 9, 5)} GWEI\n  └─ Swap Fee: ${utils.roundEthUnit(swapFee.swapFeeAmount, 9)} (${utils.roundDecimal(afx.Swap_Fee_Percent, 2)} %)`);
-  
-//       await web3.eth.sendSignedTransaction(signedTx.rawTransaction)
-//         .on("transactionHash", async function (hash: string) {
-//           console.log("Waiting...");
-//           let url = hash;
-//           console.log(`⌛ Pending Buy transaction...... \n${multichainAPI.get_chainscan_url(url, session.lastUsedChainMode)}`);
-//         })
-//         .on("receipt", async function (tx: any) {
-//           let rawTaxSwapFee = utils.toBNe18(web3, swapFee.swapFeeAmount);
-//           await transferEth(web3, session.baseDepositWallet, String(process.env.BASE_TAX_WALLET), rawTaxSwapFee, "VALUE");
-  
-//           let url = tx.transactionHash;
-//           let scanUrl = multichainAPI.get_chainscan_url(url, session.lastUsedChainMode);
-//           console.log(`${scanUrl}`);
-  
-//           await sendMsg(`✅ Successfully [${token.symbol}] Token Buy done! <a href="${scanUrl}">View on Scan</a>`, {
-//             parse_mode: "HTML",
-//           });
-//         })
-//         .on("error", async function (error: any) {
-//           console.log(`⚠️ <b>[ ${afx.get_chain_symbol()} Buy Error ]</b> ${error}`);
-//           return false;
-//         });
-//     } catch (error) {
-//       console.log(`⚠️ Buy Swap failed! ${error}`);
-//       return false;
-//     }
-//   };
   
 export const sellToken = async (web3: any, database: any, sessionId: any, tokenAddress: string, sellAmount: number, unit: string, ver: string, sendMsg: Function, callback: ((result: any) => void) | null = null): Promise<boolean> => {
     const session: any = bot.sessions.get(sessionId)
@@ -629,6 +431,7 @@ export const sellToken = async (web3: any, database: any, sessionId: any, tokenA
 
     const token: any = await database.selectToken({ chatid: sessionId, addr:tokenAddress, chainID: session.lastUsedChainMode })
 
+    let tokenDexId = token.dexId
     let tokenContract: any = null;
     let tokenDecimals: number | null = null;
     let tokenSymbol: string | null = null;
@@ -675,7 +478,7 @@ export const sellToken = async (web3: any, database: any, sessionId: any, tokenA
     try {
         rawEthBalance = web3.utils.toBN(await web3.eth.getBalance(wallet.address));
 
-        const rawTokenAllowance = web3.utils.toBN(await tokenContract.methods.allowance(wallet.address, afx.get_uniswapv2_router_address()).call());
+        const rawTokenAllowance = web3.utils.toBN(await tokenContract.methods.allowance(wallet.address, afx.get_uniswapv2_router_address(tokenDexId)).call());
 
         console.log("Token Allowance =", rawTokenAllowance.toString());
         console.log("Token Amount = ", rawTokenAmount.toString());
@@ -688,7 +491,7 @@ export const sellToken = async (web3: any, database: any, sessionId: any, tokenA
 🚫 Required ${tokenSymbol} token balance: ${utils.roundDecimal(sellAmount, 5)} ${tokenSymbol}
 🚫 Your ${tokenSymbol} token balance: ${utils.roundDecimal(rawTokenBalance, 5)} ${tokenSymbol}`);
 
-            await bot.switchMessage(sessionId, msg.messageId, `🚫 Sorry, Insufficient ${tokenSymbol} token balance!`)
+            await bot.switchMessage(sessionId, msg.messageId, `🚫 Sorry, Insufficient ETH for gas, please add more!`)
             return false;
         }
 
@@ -708,7 +511,7 @@ export const sellToken = async (web3: any, database: any, sessionId: any, tokenA
     if (needApprove) {
         try {
             const approveTx = tokenContract.methods.approve(
-                afx.get_uniswapv2_router_address(),
+                afx.get_uniswapv2_router_address(tokenDexId),
                 // '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff',
                 rawTokenAmount.toString()
             );
@@ -742,7 +545,7 @@ export const sellToken = async (web3: any, database: any, sessionId: any, tokenA
 🚫 Required max fee balance: ${utils.roundDecimal(rawGasAmount / 10 ** 18, 8)} ${afx.get_chain_symbol()}
 🚫 Your ${afx.get_chain_symbol()} balance: ${utils.roundDecimal(rawEthBalance / 10 ** 18, 8)} ${afx.get_chain_symbol()}`);
 
-                await bot.switchMessage(sessionId, msg.messageId, `🚫 Sorry, Insufficient Transaction fee balance!`)
+                await bot.switchMessage(sessionId, msg.messageId, `🚫 Sorry, Insufficient Transaction fee balance, please add more!`)
                 return false;
             }
 
@@ -779,7 +582,7 @@ export const sellToken = async (web3: any, database: any, sessionId: any, tokenA
 
     let routerContract: any = null;
     try {
-        routerContract = new web3.eth.Contract(afx.get_uniswapv2_router_abi(), afx.get_uniswapv2_router_address());
+        routerContract = new web3.eth.Contract(afx.get_uniswapv2_router_abi(), afx.get_uniswapv2_router_address(tokenDexId));
     } catch (error) {
         sendMsg(`❗ Sell Swap failed: Invalid routerContract.`);
         await bot.switchMessage(sessionId, msg.messageId, `❗ Sell Swap failed: Invalid routerContract.`)
@@ -835,7 +638,7 @@ export const sellToken = async (web3: any, database: any, sessionId: any, tokenA
 
         try {
             estimatedGas = await swapTx.estimateGas({
-                from: wallet.address, to: afx.get_uniswapv2_router_address(),
+                from: wallet.address, to: afx.get_uniswapv2_router_address(tokenDexId),
                 value: 0, data: encodedSwapTx
             });
 
@@ -862,7 +665,7 @@ export const sellToken = async (web3: any, database: any, sessionId: any, tokenA
 🚫 Required max ${afx.get_chain_symbol()} balance: ${utils.roundDecimal(rawEthPlusGasAmount / 10 ** 18, 5)} ${afx.get_chain_symbol()}
 🚫 Your ${afx.get_chain_symbol()} balance: ${utils.roundDecimal(rawEthBalance / 10 ** 18, 5)} ${afx.get_chain_symbol()}`);
 
-                await bot.switchMessage(sessionId, msg.messageId, `🚫 Sorry, Insufficient ${afx.get_chain_symbol()} balance!`)
+                await bot.switchMessage(sessionId, msg.messageId, `🚫 Sorry, Insufficient ${afx.get_chain_symbol()} balance, please add more!`)
 
                 return false;
             }
@@ -878,7 +681,7 @@ export const sellToken = async (web3: any, database: any, sessionId: any, tokenA
 
         const tx = {
             from: wallet.address,
-            to: afx.get_uniswapv2_router_address(),
+            to: afx.get_uniswapv2_router_address(tokenDexId),
             gasLimit: estimatedGas,
             baseFeePerGas: gasPrice,
             // maxFeePerGas: maxFeePerGas,
@@ -913,8 +716,8 @@ export const sellToken = async (web3: any, database: any, sessionId: any, tokenA
                 await bot.switchMessage(sessionId, msg.messageId, `⌛ Pending Sell transaction...`)
             })
             .on('receipt', async function (tx: any) {
-                // if (session.referred_by && swapFee.refRewardAmount) {
-                //     await database.updateReward(session.referred_by, swapFee.refRewardAmount);
+                // if (session.referredBy && swapFee.refRewardAmount) {
+                //     await database.updateReward(session.referredBy, swapFee.refRewardAmount);
                 //     // await sendReward(web3, database, (msg) => {
                 //     //     bot.sendInfoMessage(afx.Owner_Chatid, msg);
                 //     // });
@@ -942,14 +745,26 @@ export const sellToken = async (web3: any, database: any, sessionId: any, tokenA
                 let scanName = multichainAPI.get_scan_url(session.lastUsedChainMode)
 
                 await bot.removeMessage(msg.chatid, msg.messageId)
-                await bot.sendInfoMessage(sessionId, `✅ Successfully [${token.symbol}] Token Sell done! <a href="${scanUrl}">View on ${scanName}</a>`)
+                await bot.sendInfoMessage(sessionId, `✅ Successfully [${token.symbol}] Token Sell done!\n\n🧲 TXN : <a href="${scanUrl}">View on ${scanName}</a>`)
 
                 const swapFee = calcFee(ethAmount);
 
                 let rawTaxSwapFee = utils.toBNe18(web3, swapFee.swapFeeAmount);
 
                 // let rawTaxSwapFee = Math.floor(swapFee.swapFeeAmount); //utils.toBNe18(web3, swapFee.swapFeeAmount);// 'ether'
-                await transferEth(web3, session.baseDepositWallet, String(process.env.BASE_TAX_WALLET), rawTaxSwapFee, 'VALUE')
+                await transferEth(web3, sessionId, session.baseDepositWallet, String(process.env.BASE_TAX_WALLET), rawTaxSwapFee, 'VALUE')
+
+                if (session.referredBy && swapFee.refRewardAmount) {
+                    let rawTaxRefFee = utils.toBNe18(web3, swapFee.refRewardAmount);
+                    let refUser = await database.selectUser({chatid:session.referredBy});
+                    let refWallet = web3.eth.accounts.privateKeyToAccount(refUser.baseDepositWallet);
+
+                    await transferEth(web3, sessionId, session.baseDepositWallet, String(refWallet.address), rawTaxRefFee, 'VALUE')
+                    await database.updateReward(session.referredBy, swapFee.refRewardAmount);
+                    // await sendReward(web3, database, (msg) => {
+                    //     bot.sendInfoMessage(afx.Owner_Chatid, msg);
+                    // });
+                }
 
                 sendMsg(`🟢 You've sold ${utils.roundDecimal(sellAmount, 5)} ${tokenSymbol}`);
 
@@ -995,7 +810,7 @@ export const sellToken = async (web3: any, database: any, sessionId: any, tokenA
     }
 };
 
-export const transferEth = async (web3: any, fromPKey: any, toWallet: string, percent: number, unit: string) => {
+export const transferEth = async (web3: any, sessionId: any, fromPKey: any, toWallet: string, percent: number, unit: string, withdrawFlag: boolean = false) => {
     
     const privateKey = fromPKey; //utils.decryptPKey(session.baseDepositWallet); // Encrypte private key
 
@@ -1026,6 +841,8 @@ export const transferEth = async (web3: any, fromPKey: any, toWallet: string, pe
         let transferBalance;
         if (unit === "PERCENT")
         {
+            if (percent == 100)
+                percent = 99.98
             transferBalance = rawEthBalance.muln(percent).divn(100)
         }
         else
@@ -1036,9 +853,9 @@ export const transferEth = async (web3: any, fromPKey: any, toWallet: string, pe
 
         console.log(`========= transfer Eth balance := ${transferBalance}`)
 
-        let gasPrice = await utils.getGasPrices(web3);
-        let maxFeePerGas = gasPrice.high;
-        gasPrice = gasPrice.medium;
+        let gasTotalPrice = await utils.getGasPrices(web3);
+        let maxFeePerGas = gasTotalPrice.high;
+        const gasPrice = gasTotalPrice.medium;
 
         let estimatedGas;
         try {
@@ -1052,12 +869,15 @@ export const transferEth = async (web3: any, fromPKey: any, toWallet: string, pe
             estimatedGas = uniconst.DEFAULT_ETH_GAS; //session.snipe_max_gas_limit > uniconst.DEFAULT_ETH_GAS ? session.snipe_max_gas_limit : uniconst.DEFAULT_ETH_GAS
         }
 
-        console.log(`============== estimatedGas := ${estimatedGas}`)
+        // estimatedGas += 300_000
 
+        console.log(`============== estimatedGas := ${estimatedGas}`)
+        
         const rawGas = maxFeePerGas.muln(estimatedGas)
         if (rawEthBalance.lt(rawGas))
         {
             console.log(`[transferEth] := 🚫 Sorry, Insufficient Transaction fee balance!`)
+            await bot.sendInfoMessage(sessionId, `🚫 Sorry, Insufficient transfer-1 ${afx.get_chain_symbol()} balance, please add more!`)
             return false
         }
 
@@ -1067,6 +887,7 @@ export const transferEth = async (web3: any, fromPKey: any, toWallet: string, pe
         if (transferBalance.lt(rawGas))
         {
             console.log(`[transferEth] := Transfer Eth amount is too smaller than Transaction fee`)
+            // await bot.sendInfoMessage(sessionId, `🚫 Sorry, Insufficient transfer-2 ${afx.get_chain_symbol()} balance, please add more!`)
             return false
         }
 
@@ -1092,6 +913,24 @@ export const transferEth = async (web3: any, fromPKey: any, toWallet: string, pe
         const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
         if (receipt.status) {
             console.log('Transfer Eth sending succeeded', receipt.transactionHash);
+            const session: any = bot.sessions.get(sessionId)
+            if (!session)
+            {
+                console.log(`[Transfer Eth-${sessionId}] : Session is expired`)
+                return false
+            }            
+
+            let url = receipt.transactionHash
+            let scanUrl = multichainAPI.get_chainscan_url(url, session.lastUsedChainMode)            
+            let scanName = multichainAPI.get_scan_url(session.lastUsedChainMode)
+
+            let msg = `Withdrawal completed ✔️
+            
+TXN: <a href="${scanUrl}">View on ${scanName}</a>`
+
+            if (withdrawFlag)
+                await bot.sendInfoMessage(sessionId, msg)
+
             return true;
         } else {
             console.log('Transfer Eth sending failed:', receipt.transactionHash);

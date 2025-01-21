@@ -55,8 +55,7 @@ const parseCode = async (database: any, session: any, wholeCode: string) => {
 
                         instance.sendInfoMessage(
                             referredBy,
-                            `Great news! You have invited @${session.username}
-You can earn 1.5% of their earning forever!`
+                            `Great news! You have successfully referred @${session.username} 🚀`
                         );
 
                         session.referredBy = referredBy;
@@ -707,6 +706,7 @@ const processSettings = async (msg: any, database: any) => {
         console.log("------------Wait set withdraw wallet addr - 2 = ", addr)
         // process wallet withdraw
         await instance.removeMessage(sessionId, messageId)
+        await instance.removeMessage(sessionId, stateData.message_id)
         await botLogic.setWithdrawWallet(sessionId, addr)
         session.withdrawWallet = addr
 
@@ -734,6 +734,8 @@ const processSettings = async (msg: any, database: any) => {
 
         // process withdraw amount
         await instance.removeMessage(sessionId, messageId)
+        await instance.removeMessage(sessionId, stateData.message_id)
+
         await botLogic.setWithdrawAmountAndIDX(sessionId, amount, 3)
 
         // await botLogic.withdraw(sessionId, addr)
@@ -751,10 +753,10 @@ const processSettings = async (msg: any, database: any) => {
         stateNode.state === MyStateCode.WAIT_SETTING_BUY_RIGHT_AMOUNT
     ) {
         const amount = Number(msg.text.trim());
-        if (isNaN(amount) || amount < 0.01) {
+        if (isNaN(amount) || amount < 0.00001) {
             instance.openMessage(
                 sessionId, "", 0,
-                `⛔ Sorry, the buy amount you entered is invalid. Please try again, setting 0.01 at least`
+                `⛔ Sorry, the buy amount you entered is invalid. Please try again, setting 0.0001 at least`
             );
             return;
         }

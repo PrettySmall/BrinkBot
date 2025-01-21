@@ -86,7 +86,7 @@ export const withdrawToUser = async (database: any, sessionId: string, toWallet:
    
     assert(utils_base.web3HttpInst)
     // let fromWallet = utils_base.getWalletAddressFromPKey(user.baseDepositWallet)
-    await base_swap.transferEth(utils_base.web3HttpInst, user.baseDepositWallet, toWallet, user.withdrawAmount, 'PERCENT')
+    await base_swap.transferEth(utils_base.web3HttpInst, sessionId, user.baseDepositWallet, toWallet, user.withdrawAmount, 'PERCENT', true)
            
     console.log(`[withdrawToUser] : transfer Wrapped token is passed`)
 

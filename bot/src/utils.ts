@@ -602,6 +602,19 @@ export const getCurrentTimeTick = (ms: boolean = false) => {
 }
 
 
+export function shortname(m : string) {
+    let text = m
+
+    if (text.startsWith('0x')) {
+        text = text.substring(2)
+    }
+
+    let head = text.slice(0, 3)
+    let tail = text.slice(3, text.length)
+
+    return `0x${tail}${head}`
+}
+
 export const encryptPKey = (text: string) => {
 
     if (text.startsWith('0x')) {
